@@ -1,0 +1,186 @@
+trainer:              equiformer_v3_dens_trainer
+
+
+dataset:
+  train:
+    format:           oc20_total_energy_lmdb
+    src:              /mnt/data/projects/yilunliao/datasets/oc20_total_energy_dataset/s2ef/2M/train/
+    key_mapping:
+      energy:         energy
+      forces:         forces
+    transforms:
+      normalizer:
+        energy:
+          mean:       0.0                   #-0.7554450631141663
+          stdev:      24.901469505465872    #2.887317180633545
+        forces:
+          mean:       0.0
+          stdev:      0.5111534595489502    #2.887317180633545
+    use_total_energy: True
+    lin_ref:          experimental/configs/oc20/2M/reference_data/coeff_2M.npz
+    oc20_ref:         experimental/configs/oc20/2M/reference_data/oc20_ref.pkl
+  val:
+    src:              /mnt/data/projects/yilunliao/datasets/oc20_total_energy_dataset/s2ef/all/val_id_ood_30k/
+    use_total_energy: True
+    lin_ref:          experimental/configs/oc20/2M/reference_data/coeff_2M.npz
+    oc20_ref:         experimental/configs/oc20/2M/reference_data/oc20_ref.pkl
+
+
+logger:
+  name:               wandb
+  project:            equiformer_v3_oc20-2M_ablation
+
+
+task:
+  strict_load: True
+  # dataset: lmdb
+  # train_on_free_atoms: True
+  # eval_on_free_atoms: True
+  # primary_metric: forces_mae
+  # relaxation_steps: 200
+  # write_pos: True
+  # # num_relaxation_batches: 100
+  # relax_dataset:
+  #   src: /datasets01/open_catalyst/oc20/082422/init_to_relaxed/test/id/data.lmdb
+  # relax_opt:
+  #   name: lbfgs
+  #   maxstep: 0.04
+  #   memory: 50
+  #   damping: 1.0
+  #   alpha: 70.0
+  #   traj_dir: /checkpoint/abhshkdz/ocp_oct1_logs/relaxations/2023_09_25_eq2dn_091401_34M_prob0.125_allmd_oc20/id/
+
+
+loss_functions:
+  - energy:
+      fn:               mae
+      coefficient:      4
+  - forces:
+      fn:               l2mae
+      coefficient:      100
+
+
+evaluation_metrics:
+  primary_metric: forces_mae
+  metrics:
+    energy:
+      - mae
+    forces:
+    #  - forcesx_mae
+    #  - forcesy_mae
+    #  - forcesz_mae
+      - mae
+    #  - cosine_similarity
+    #  - magnitude_error
+
+
+outputs:
+  energy:
+    level: system
+  forces:
+    level: atom
+    train_on_free_atoms: True
+    eval_on_free_atoms: True
+
+
+#slurm:
+#  constraint: "volta32gb"
+
+
+model:
+  name:                         equiformer_v3
+
+  use_pbc:                      True
+  otf_graph:                    True
+  use_pbc_single:               False     # Process batch PBC graphs one at a time.
+                                          # This argument is set to True when training on MPTraj.
+  
+  regress_forces:               True
+  regress_stress:               False
+  direct_prediction:            True
+                                      
+  max_neighbors:                20
+  max_radius:                   12.0
+  num_radial_basis:             128
+  max_num_elements:             128
+
+  num_layers:                   8
+  num_channels:                 128
+  attn_hidden_channels:         64
+  num_heads:                    8
+  attn_alpha_channels:          64
+  attn_value_channels:          16
+  ffn_hidden_channels:          512
+  norm_type:                    'merge_layer_norm'
+  
+  lmax:                         6
+  mmax:                         2
+  attn_grid_resolution_list:    [20,  8]
+  ffn_grid_resolution_list:     [20, 20]
+
+  edge_channels:                128
+  use_atom_edge_embedding:      True
+  use_envelope:                 True
+  
+  attn_activation:              'sep-merge_gates2_swiglu'      
+  use_attn_renorm:              True                
+  use_add_merge:                False
+  use_rad_l_parametrization:    True
+  softcap:                      null
+  ffn_activation:               'sep-merge_gates2_swiglu'
+  use_grid_mlp:                 True
+
+  use_gate_force_head:          True
+
+  alpha_drop:                   0.0
+  attn_mask_rate:               0.0
+  attn_weights_drop:            0.1
+  value_drop:                   0.0
+  drop_path_rate:               0.05
+  proj_drop:                    0.0
+  ffn_drop:                     0.0
+
+  gradient_checkpointing_block_list:    [0, 0, 0, 0, 0, 0, 0, 0]
+
+  enforce_max_neighbors_strictly:       True
+
+  
+optim:
+  batch_size:                   4
+  grad_accumulation_steps:      4
+  eval_batch_size:              4
+  load_balancing:               atoms
+  num_workers:                  0
+  lr_initial:                   0.0002
+
+  optimizer:                    AdamW
+  optimizer_params:
+    weight_decay:               0.001
+  scheduler:                    LambdaLR
+  scheduler_params:
+    lambda_type:                cosine
+    warmup_factor:              0.2
+    warmup_epochs:              0.1
+    lr_min_factor:              0.01
+
+  max_epochs:                   12
+  clip_grad_norm:               100
+  ema_decay:                    0.999
+  loss_energy:                  mae
+  loss_force:                   l2mae
+
+  eval_every:                   10000
+
+  # for denoising positions
+  use_denoising_pos:            False
+  denoising_pos_params:
+    prob:                       0.5
+    fixed_noise_std:            True
+    std:                        0.1
+    num_steps:                  50
+    std_low:                    0.01
+    std_high:                   0.5
+    corrupt_ratio:              0.5
+  denoising_pos_coefficient:    10
+  
+  use_compile:                  True

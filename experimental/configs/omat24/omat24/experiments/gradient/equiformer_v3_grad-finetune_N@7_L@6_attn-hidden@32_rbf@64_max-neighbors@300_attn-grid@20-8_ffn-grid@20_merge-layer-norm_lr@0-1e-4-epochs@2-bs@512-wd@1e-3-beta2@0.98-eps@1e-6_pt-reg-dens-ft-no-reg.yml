@@ -1,0 +1,243 @@
+dataset:
+  train:
+    format: ase_db
+    src:
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/aimd-from-PBE-1000-npt
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/aimd-from-PBE-1000-nvt
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/aimd-from-PBE-3000-npt
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/aimd-from-PBE-3000-nvt
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/rattled-1000
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/rattled-1000-subsampled
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/rattled-300
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/rattled-300-subsampled
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/rattled-500
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/rattled-500-subsampled
+      - /mnt/data/projects/yilunliao/datasets/omat24/train/rattled-relax
+    a2g_args:
+      r_energy: True
+      r_forces: True
+      r_stress: True
+    transforms:
+      #decompose_tensor:
+      #  tensor: stress
+      #  rank: 2
+      #  decomposition:
+      #    stress_isotropic:
+      #      irrep_dim: 0
+      #    stress_anisotropic:
+      #      irrep_dim: 2
+
+      normalizer:
+        #######################################################################################
+        #   Use either `fit`, `file` or specifying everything
+        #   1.  If loading from a checkpoint, the values from using `fit` will be overwritten
+        #######################################################################################
+        #fit:
+        #  targets:
+        #    energy: { mean: 0.0}
+        #    forces: { mean: 0.0 }
+        #    stress: { mean: 0.0 }
+        #    #stress_isotropic: { }
+        #    #stress_anisotropic: { mean: 0.0 }
+        #  batch_size: 64
+        #  num_batches: 10000
+        #file: experimental/configs/omat24/mptrj/preprocessing/equiformer_v2_mptrj_normalizer.pt
+        energy:
+          mean:     0.0
+          rmsd:     4.980640411376953     # (1) Following eSEN
+                                          # (2) Remove the division after sum aggregation for energy prediction
+        forces:
+          mean:     0.0
+          rmsd:     4.980640411376953
+        stress:
+          mean:     0.0
+          rmsd:     4.980640411376953
+        #isotropic_stress:
+        #  mean:     -0.003037823364138603
+        #  stdev:    0.06647835671901703
+        #anisotropic_stress:
+        #  mean:     0.0
+        #  stdev:    0.026824669912457466
+
+      element_references:
+        #######################################################################################
+        #   Use either `fit` or `file`
+        #   1.  If loading from a checkpoint, the values from using `fit` will be overwritten
+        #######################################################################################
+        #fit:
+        #  targets:
+        #    - energy
+        #  batch_size: 64
+        #  num_batches: 1000
+        #file: experimental/configs/omat24/mptrj/preprocessing/equiformer_v2_mptrj_element_references.pt
+        energy:
+          file: experimental/configs/omat24/omat24/preprocessing/omat24_energy_element_references.npz
+
+    max_atoms: 14000
+      
+  val:
+    format: ase_db
+    src:
+      #- /data/NFS/radish/ylliao/omat24_dataset/mptrj/aselmdb_uncorrected_total_energy_100k
+      #- /data/NFS/radish/ylliao/omat24_dataset/salex/val_30k
+      - /mnt/data/projects/yilunliao/datasets/omat24/val_30k
+    a2g_args:
+      r_energy: True      # already use `uncorrected_total_energy` after pre-processing
+      r_forces: True
+      r_stress: True
+
+
+trainer:              equiformer_v3_dens_trainer
+
+
+logger:
+  name:               wandb
+  project:            equiformer_v3_omat24-salex-mptrj
+
+
+hide_eval_progressbar: False
+
+
+evaluation_metrics:
+  primary_metric: forces_mae
+  metrics:
+    energy:
+      - mae
+      - per_atom_mae
+    forces:
+      - mae
+      - cosine_similarity
+    stress:
+      - mae
+
+
+outputs:
+  energy:
+    level:                system
+    property:             energy
+  forces:
+    level:                atom
+    property:             forces
+    train_on_free_atoms:  True
+    eval_on_free_atoms:   True
+  stress:
+    level:                system
+    property:             stress
+
+
+loss_functions:
+  - energy:
+      fn:                 per_atom_mae
+      coefficient:        20     # Both paper and checkpoint use 20 instead of 5
+  - forces:
+      fn:                 l2mae
+      coefficient:        20
+  - stress:
+      fn:                 mae
+      coefficient:        5
+
+
+model:
+  name:                         equiformer_v3
+
+  use_pbc:                      True
+  use_pbc_single:               True      # Process batch PBC graphs one at a time.
+                                          # This argument is set to True when training on MPtrj.
+  otf_graph:                    True
+
+  regress_forces:               True
+  regress_stress:               True
+  direct_prediction:            False
+                                      
+  max_neighbors:                300
+  max_radius:                   6.0
+  num_radial_basis:             64
+  max_num_elements:             128
+
+  num_layers:                   7
+  num_channels:                 128
+  attn_hidden_channels:         32
+  num_heads:                    8
+  attn_alpha_channels:          64
+  attn_value_channels:          16
+  ffn_hidden_channels:          512
+  norm_type:                    'merge_layer_norm'  # ['sep_layer_norm', 'sep_layer_norm_liger']
+
+  lmax:                         6
+  mmax:                         2
+  attn_grid_resolution_list:    [20,  8]
+  ffn_grid_resolution_list:     [20, 20]
+
+  edge_channels:                128
+  use_atom_edge_embedding:      True
+  use_envelope:                 True
+  
+  attn_activation:              'sep-merge_gates2_swiglu'      
+  use_attn_renorm:              True                
+  use_add_merge:                False
+  use_rad_l_parametrization:    True
+  softcap:                      null
+  ffn_activation:               'sep-merge_gates2_swiglu'
+  use_grid_mlp:                 True
+
+  use_gate_force_head:          False
+
+  alpha_drop:                   0.0
+  attn_mask_rate:               0.0
+  attn_weights_drop:            0.0
+  value_drop:                   0.0
+  drop_path_rate:               0.0
+  proj_drop:                    0.0
+  ffn_drop:                     0.0
+  use_head_reg:                 False
+
+  gradient_checkpointing_block_list:    [0, 0, 0, 0, 0, 0, 0]
+
+  enforce_max_neighbors_strictly:       True
+
+  avg_num_nodes:                1       # Remove the division after sum aggregation over nodes for energy prediction
+
+
+optim:
+  batch_size:                   8
+  grad_accumulation_steps:      2
+  eval_batch_size:              8
+  load_balancing:               atoms
+  num_workers:                  0
+  lr_initial:                   0.0001
+
+  optimizer:                    AdamW
+  optimizer_params:
+    weight_decay:               0.001
+    betas:                      [0.9, 0.98]
+    eps:                        0.000001
+  scheduler:                    LambdaLR
+  scheduler_params:
+    lambda_type:                cosine
+    warmup_factor:              0.0
+    warmup_epochs:              0.1
+    lr_min_factor:              0.01
+
+  max_epochs:                   2
+  clip_grad_norm:               100
+  ema_decay:                    0.999
+
+  eval_every:                   2500
+  
+  use_denoising_pos:            False
+  denoising_pos_params:
+    prob:                       0.5
+    fixed_noise_std:            True
+    std:                        0.025
+    corrupt_ratio:              0.5
+    num_steps:                  50    # not used
+    std_low:                    0.01  # not used
+    std_high:                   0.5   # not used
+    min_num_atoms:              null  # set to `None` since we use `strict_max_ratio`
+    strict_max_ratio:           0.75
+    max_force_norm:             2.5
+  denoising_pos_coefficient:    1
+
+  use_compile:                  False
+
+  load_pretrained_weights:      /mnt/data/projects/yilunliao/fairchem_omat24_08-04-2025/models/omat24/equiformer_v3/trained_checkpoints/0103-2_direct_N@7_L@6_epochs@4-bs@512-beta2@0.98-eps@1e-6_dens-w@1-r@0.5-0.75-max-f@2.5_no-amp/checkpoint_no-energy_head.pt 

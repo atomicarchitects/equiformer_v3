@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NNODES=2
+NPROC_PER_NODE=8
+RDZV_PORT=29500
+
+REMOTE_PREFIX=''
+
+###########################
+#       Script
+###########################
+
+MAIN_PATH="my_main.py"
+
+LOG_DIR="/home/models/omat24/equiformer_v3"
+
+CONFIG_PATH="experimental/configs/omat24/mptrj/experiments/direct/equiformer_v3_N@7_L@4_attn-hidden@32_rbf@10_max-neighbors@300_attn-grid@14-8_ffn-grid@14_use-gate-force-head_merge-layer-norm_epochs@70-bs@512-wd@1e-3-beta2@0.95_dens-p@0.5-std@0.025-r@0.5-w@10-strict-max-r@0.75-no-stress.yml"
+IDENTIFIER="mptrj_direct_N@7_L@4_dens-strict-max-r@0.75-no-stress"
+
+PROJECT="equiformer_v3_mptrj"
+
+
+REMOTE_SCRIPT="$MAIN_PATH \
+    --num-gpus ${NPROC_PER_NODE} \
+    --num-nodes ${NNODES} \
+    --mode train \
+    --amp \
+    --config-yml $CONFIG_PATH \
+    --run-dir $LOG_DIR \
+    --print-every 200 \
+    --seed 1 \
+    --identifier $IDENTIFIER \
+    --optim.num_workers=0 \
+"
+
+
+if [[ ! -f "$HOSTLIST" ]]; then
+  echo "Missing $HOSTLIST"; exit 1
+fi
+if [[ $(wc -l < "$HOSTLIST" | tr -d ' ') -ne $NNODES ]]; then
+  echo "Expected $NNODES lines in $HOSTLIST"; exit 1
+fi
+
+mapfile -t HOSTS < "$HOSTLIST"
+MASTER_IP="${HOSTS[0]}"
+#MASTER_PRIVATE_IP=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+#  "${SSH_USER}@${MASTER_IP}" "ip -4 -o addr show enp6s0 | awk '{print \$4}' | cut -d/ -f1")
+MASTER_PRIVATE_IP="${HOSTS[0]}"
+
+echo "MASTER PUBLIC IP: ${MASTER_IP}"
+echo "RENDEZVOUS ENDPOINT: ${MASTER_PRIVATE_IP}:${RDZV_PORT}"
+echo "NNODES: $NNODES"
+echo "NPROC_PER_NODE: $NPROC_PER_NODE"
+echo "SCRIPT: $REMOTE_SCRIPT"
+echo
+
+rank=0
+for ip in "${HOSTS[@]}"; do
+  echo "[launch] node_rank=$rank @ $ip"
+  ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o UserKnownHostsFile=/dev/null \
+    "${SSH_USER}@${ip}" \
+    "bash -lc 'set -euo pipefail; \
+      ulimit -n 65536; \
+      ${REMOTE_PREFIX} \
+      nohup ${TORCHRUN} \
+        --nnodes=${NNODES} \
+        --nproc_per_node=${NPROC_PER_NODE} \
+        --rdzv-id=10 \
+        --rdzv_backend=c10d \
+        --rdzv_endpoint=${MASTER_PRIVATE_IP}:${RDZV_PORT} \
+        --node_rank=${rank} \
+        ${REMOTE_SCRIPT} \
+        > \$HOME/torchrun_${rank}.log 2>&1 & echo \$! > \$HOME/torchrun_${rank}.pid'"
+  ((rank+=1))
+done
+
+echo
+echo "Launched. Logs will be on each node as ~/torchrun_<rank>.log ; PIDs in ~/torchrun_<rank>.pid."
