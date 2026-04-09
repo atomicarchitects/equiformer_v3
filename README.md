@@ -240,7 +240,7 @@ The preprocessing of MPtrj data is [here](#mptrj).
 
 ## Checkpoint ##
 
-Trained checkpoints can be found in the [HuggingFace page](https://huggingface.co/yilunliao/equiformer_v3).
+Trained checkpoints can be found in the [HuggingFace page](https://huggingface.co/mirror-physics/equiformer_v3).
 
 <!--
 ### OC20
