@@ -1,7 +1,7 @@
 # EquiformerV3: Scaling Efficient, Expressive, and General SE(3)-Equivariant Graph Attention Transformers
 
 
-**[Paper](experimental/docs/equiformer_v3_paper.pdf) (will be on ArXiv soon)** | **[Checkpoint](https://huggingface.co/mirror-physics/equiformer_v3)**
+**[Paper](https://arxiv.org/abs/2604.09130)** | **[Checkpoint](https://huggingface.co/mirror-physics/equiformer_v3)**
 
 
 This repository contains the official PyTorch implementation of the work "EquiformerV3: Scaling Efficient, Expressive, and General SE(3)-Equivariant Graph Attention Transformers".
@@ -30,9 +30,7 @@ We include the original codebase for ease of reproducibility and place the code 
 0. [Checkpoint](#checkpoint)
 0. [Evaluation](#evaluation)
 0. [Acknowledgement](#acknowledgement)
-<!-- 
 0. [Citation](#citation)
--->
 
 
 ## Environment Setup ##
@@ -351,13 +349,30 @@ Our implementation is based on [PyTorch](https://pytorch.org/), [PyG](https://py
 
 
 
-<!--
 ## Citation ##
 
 Please consider citing the works below if this repository is helpful:
 
-- EquiformerV3 (reference will be added once it is on ArXiv)
+- [EquiformerV3](https://arxiv.org/abs/2604.09130):
+    ```bibtex
+    @article{
+        equiformer_v3,
+        title={EquiformerV3: Scaling Efficient, Expressive, and General SE(3)-Equivariant Graph Attention Transformers}, 
+        author={Yi-Lun Liao and Alexander J. Hoffman and Sabrina C. Shen and Alexandre Duval and Sam Walton Norwood and Tess Smidt},
+        journal={arXiv preprint arXiv:2604.09130},
+        year={2026}
+    }
+    ```
 
+- [DeNS](https://arxiv.org/abs/2403.09549):
+    ```bibtex
+    @article{
+        DeNS,
+        title={Generalizing Denoising to Non-Equilibrium Structures Improves Equivariant Force Fields}, 
+        author={Yi-Lun Liao and Tess Smidt and Muhammed Shuaibi* and Abhishek Das*},
+        journal={arXiv preprint arXiv:2403.09549},
+        year={2024}
+    }
+    ```
 
 Please direct questions to Yi-Lun Liao (ylliao@mit.edu).
---->
