@@ -291,7 +291,7 @@ Trained checkpoints can be found in the [HuggingFace page](https://huggingface.c
 
     d. Run the script:
     ```bash
-        sh experimental/scripts/eval/omat24/s2ef/equiformer_v3/equiformer_v3_g@8.sh
+        sh experimental/scripts/eval/omat24/equiformer_v3/equiformer_v3_g@8.sh
     ```
 
 
